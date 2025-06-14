@@ -21,8 +21,8 @@ This repository holds the code associated with the "Learning to Estimate Two Den
 @article{Brebion2025DELTADD,
   title={{DELTA}: Dense Depth from Events and {LiDAR} using Transformer's Attention},
   author={Vincent Brebion and Julien Moreau and Franck Davoine},
-  journal={2025 IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops (CVPRW)},
-  pages={x-x},
+  journal={Proceedings of the Computer Vision and Pattern Recognition Conference (CVPR) Workshops},
+  pages={4898-4907},
   year={2025}
 }
 ```
