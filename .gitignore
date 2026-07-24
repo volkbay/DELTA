@@ -1,2 +1,6 @@
-**/__pycache__
+weights/
 out/
+m3ed_raw/
+m3ed_processed/
+*.log
+__pycache__/

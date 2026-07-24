@@ -1,0 +1,27 @@
+# Single unified conda env for ALL DELTA operations (preprocessing + inference).
+# Upstream splits this into two envs (aled_delta + preprocess_m3ed); one is
+# enough -- ouster-sdk 0.11.1 coexists with the torch/opencv/fvcore stack under
+# numpy<2 (verified: numpy 1.26.4, torch 2.x).
+#   conda env create -f environment.yml && conda activate delta
+name: delta
+channels:
+  - pytorch
+  - conda-forge
+dependencies:
+  - python=3.12
+  - numpy<2
+  - pytorch
+  - torchvision
+  - opencv
+  - h5py
+  - hdf5plugin
+  - matplotlib
+  - pandas
+  - pyyaml
+  - tensorboard
+  - tqdm
+  - pip
+  - pip:
+      - ouster-sdk==0.11.1
+      - fvcore
+      - standard-imghdr

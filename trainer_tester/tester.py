@@ -56,6 +56,19 @@ class Tester():
     self.save_viz = config["save_visualization"]
     self.measure_comp_complexity = config["measure_computational_complexity"]
 
+    # [devogam] optional dense-depth dump: bf-aligned predictions in metres
+    self.dump_h5_path = config.get("dump_depth_h5", None)
+    self._dump_f = None
+    self._dump_i = 0
+    if self.dump_h5_path:
+      import atexit
+      atexit.register(self._close_dump)
+
+  def _close_dump(self):
+    if getattr(self, "_dump_f", None) is not None:
+      self._dump_f.close()
+      self._dump_f = None
+
 
   @torch.inference_mode()
   def test(self) -> None:
@@ -214,6 +227,21 @@ class Tester():
         if af_depths_available:
           unpadded_af_depths = af_depths[:, :, min_y:max_y, min_x:max_x]
         unpadded_pred_depths = pred_depths[:, :, min_y:max_y, min_x:max_x]
+
+        # [devogam] dump bf-aligned dense depth (metres) to an h5
+        if self.dump_h5_path is not None and bf_depths_available:
+          import h5py, numpy as np
+          hw = tuple(unpadded_pred_depths.shape[-2:])
+          if self._dump_f is None:
+            self._dump_f = h5py.File(self.dump_h5_path, "w")
+            self._dump_ds = self._dump_f.create_dataset(
+              "depth", shape=(0,) + hw, maxshape=(None,) + hw,
+              dtype="float16", chunks=(1,) + hw)
+          d = (unpadded_pred_depths[0, 0].detach().cpu().numpy()
+               * self.lidar_max_range).astype("float16")
+          self._dump_ds.resize(self._dump_i + 1, axis=0)
+          self._dump_ds[self._dump_i] = d
+          self._dump_i += 1
 
         # If required, we save images of the input and output data
         if self.save_viz:

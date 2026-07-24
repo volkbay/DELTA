@@ -124,9 +124,11 @@ def compute_event_volume(events_x: ndarray, events_y: ndarray, events_t: ndarray
   t_star = (bins-1)*(events_t-events_t[0])/(events_t[-1]-events_t[0])
 
   # We create an index of unique (x, y) events
-  evts_x_y = list(zip(events_x, events_y))
-  idx, u_evts = pd.factorize(evts_x_y)
-  u_evts = np.array([np.array(u_evt) for u_evt in u_evts])
+  # pandas-free unique-index of (x, y) events (pd.factorize rejects a list of
+  # tuples on newer pandas). Encode (x, y) as a single int key, then decode.
+  key = events_y.astype(np.int64) * 1280 + events_x.astype(np.int64)
+  u_keys, idx = np.unique(key, return_inverse=True)
+  u_evts = np.stack([u_keys % 1280, u_keys // 1280], axis=1)  # cols [x, y]
 
   # Then, for each bin...
   for i in range(bins):
@@ -191,19 +193,19 @@ def preprocess_recording(paths: list[str]) -> None:
   gt_recording = h5py.File(paths[1])
 
   # We read the event data
-  prophesee_x = data_recording["/prophesee/left/x"][()]
-  prophesee_y = data_recording["/prophesee/left/y"][()]
-  prophesee_t = data_recording["/prophesee/left/t"][()]
-  prophesee_p = data_recording["/prophesee/left/p"][()]
+  prophesee_x = data_recording["/prophesee/left/x"]  # streamed (6.85B events)
+  prophesee_y = data_recording["/prophesee/left/y"]
+  prophesee_t = data_recording["/prophesee/left/t"]
+  prophesee_p = data_recording["/prophesee/left/p"]
 
   # We read the LiDAR data
-  lidar_packets_buf = data_recording['/ouster/data'][()]
+  lidar_packets_buf = data_recording['/ouster/data']  # streamed per-scan
   lidar_info = SensorInfo(data_recording['/ouster/metadata'][()])
 
   # We read the GT depth maps, and compute their quantity
   # Note: since we need depth maps before and after the events, we cannot use the last depth map as
   # a "before" as it would not have an "after"
-  gt_depth_maps = gt_recording["/depth/prophesee/left"][()]
+  gt_depth_maps = gt_recording["/depth/prophesee/left"]  # streamed per-frame
   nb_bf_gt_depth_maps = gt_depth_maps.shape[0] - 1
 
   # We read the calibration data
@@ -220,18 +222,20 @@ def preprocess_recording(paths: list[str]) -> None:
   elif args.set == "val":
     lidar_clouds_per_seq = 20
   else:
-    lidar_clouds_per_seq = nb_bf_gt_depth_maps
+    lidar_clouds_per_seq = min(50, nb_bf_gt_depth_maps)  # chunked to bound RAM
 
   # Each recording allows us to generate N/L sequences, where N is the total of "before" depth maps,
   # and L is the total number of successive point clouds (= nb of bf depth maps) in a sequence
-  nb_seq = nb_bf_gt_depth_maps // lidar_clouds_per_seq
+  # ceil so the final partial chunk (remainder frames) is not dropped
+  nb_seq = -(-nb_bf_gt_depth_maps // lidar_clouds_per_seq)
 
   # We generate each of the nb_seq sequences
   for i in range(nb_seq):
     sequence = []
 
     # Each sequence contains L successive LiDAR clouds from the recording
-    for j in range(i*lidar_clouds_per_seq, (i+1)*lidar_clouds_per_seq):
+    for j in range(i*lidar_clouds_per_seq,
+                   min((i+1)*lidar_clouds_per_seq, nb_bf_gt_depth_maps)):
       # We get the LiDAR cloud and project it as an image
       lidar_packet_buf = lidar_packets_buf[j, :, :]
       lidar_cloud = compute_lidar_cloud_from_ouster_packets(lidar_packet_buf, lidar_info)
@@ -247,8 +251,8 @@ def preprocess_recording(paths: list[str]) -> None:
       af_depth_image = compute_depth_image(af_depth_image_raw, LIDAR_MAX_RANGE)
 
       # And we finish with the events, for which we compute the corresponding event volumes
-      events_start_idx = gt_recording["/ts_map_prophesee_left"][j]
-      events_end_idx = gt_recording["/ts_map_prophesee_left"][j+1]
+      events_start_idx = int(gt_recording["/ts_map_prophesee_left"][j])
+      events_end_idx = int(gt_recording["/ts_map_prophesee_left"][j+1])
       events_mid_idx = int((events_end_idx+events_start_idx)//2)
       events_x_0 = prophesee_x[events_start_idx:events_mid_idx]
       events_y_0 = prophesee_y[events_start_idx:events_mid_idx]
