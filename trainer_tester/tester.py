@@ -64,6 +64,11 @@ class Tester():
       import atexit
       atexit.register(self._close_dump)
 
+    # [devogam] optional grey-dilation (square kernel) of the sparse LiDAR
+    # projection before it enters the network -- turns the very sparse M3ED
+    # projection (~3-7% valid) into denser, more image-like blob guidance.
+    self.dilate_lidar = int(config.get("dilate_lidar", 0) or 0)
+
   def _close_dump(self):
     if getattr(self, "_dump_f", None) is not None:
       self._dump_f.close()
@@ -143,6 +148,12 @@ class Tester():
 
         if lidar_proj_available:
           lidar_proj = lidar_proj.to(self.device, non_blocking=True)
+          if self.dilate_lidar > 1:
+            # grey-dilate (max-pool, stride 1) grows each projected point into a
+            # self.dilate_lidar-square blob -> denser LiDAR guidance.
+            k = self.dilate_lidar
+            lidar_proj = torch.nn.functional.max_pool2d(
+                lidar_proj, kernel_size=k, stride=1, padding=k // 2)
           prop_mem = None
           padded_img_size = lidar_proj.shape[-2:]
         else:
