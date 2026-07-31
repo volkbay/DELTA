@@ -30,7 +30,32 @@ def parse_args():
   parser = argparse.ArgumentParser()
   parser.add_argument("config_file", help="Path to the JSON config file to use for testing")
   parser.add_argument("checkpoint", help="Path to the .pth checkpoint file to use for testing")
+  parser.add_argument("--set", dest="overrides", nargs="*", default=[], metavar="KEY=VALUE",
+                      help="Override any config key on top of the JSON file, e.g. "
+                           "`--set dilate_lidar=5 dataset.path_test=m3ed_processed`. Nested keys "
+                           "use dots. Values are parsed as JSON when possible, else kept as "
+                           "strings. This keeps one config per dataset: every other case is a "
+                           "parameter, not a new file.")
   return parser.parse_args()
+
+
+def apply_overrides(config, overrides):
+  """Apply `key=value` (dotted keys allowed) overrides in-place onto a loaded config dict."""
+  for item in overrides:
+    if "=" not in item:
+      raise ValueError(f"Override '{item}' is not of the form KEY=VALUE")
+    key, raw = item.split("=", 1)
+    try:
+      value = json.loads(raw)
+    except json.JSONDecodeError:
+      value = raw
+    node = config
+    *parents, leaf = key.split(".")
+    for part in parents:
+      node = node.setdefault(part, {})
+    node[leaf] = value
+    print(f"config override: {key} = {value!r}")
+  return config
 
 
 def display_count_parameters(model: nn.Module) -> int:
@@ -60,6 +85,7 @@ def main():
   args = parse_args()
   with open(args.config_file, encoding="utf-8") as cfg_file:
     config = json.load(cfg_file)
+  config = apply_overrides(config, args.overrides)
 
   # We configure the device for PyTorch
   device = "cuda" if torch.cuda.is_available() else "cpu"

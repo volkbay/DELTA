@@ -11,12 +11,12 @@
   "num_workers": 0,
   "dataset": {
     "name": "M3ED",
-    "path_test": "/path/to/preprocessed/m3ed/test/",
+    "path_test": "m3ed_processed",
     "test_is_zipped": false,
     "test_subset_rule": ""
   },
   "lidar_max_range": 120.0,
   "save_visualization": false,
   "measure_computational_complexity": false,
-  "dump_depth_h5": "out/dense_depth.h5"
+  "dump_depth_h5": "out/depth_m3ed.h5"
 }
