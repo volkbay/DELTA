@@ -10,7 +10,11 @@ channels:
 dependencies:
   - python=3.12
   - numpy<2
-  - pytorch
+  # >=2.5: the decoding head uses nn.Buffer, which older releases lack
+  # (upstream states 2.6 was used). Conda's unpinned solve lands on 2.4.
+  - pytorch>=2.6
+  # must match the pytorch build -- a mismatched pair fails at import with
+  # "operator torchvision::nms does not exist"
   - torchvision
   - opencv
   - h5py
